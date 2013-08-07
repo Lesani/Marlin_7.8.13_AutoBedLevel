@@ -1118,6 +1118,100 @@ void process_commands()
       previous_millis_cmd = millis();
       endstops_hit_on_purpose();
       break;
+     case 29: // G29 Detailed Z-Probe, probes the bed at 3 points.
+#ifdef ENABLE_AUTO_BED_LEVELING
+        // TODO: (Z_MIN_PIN > -1) should also be true.  I don't know the prefered way to ensure this.
+        {
+            st_synchronize();
+            // make sure the bed_level_rotation_matrix is identity or the planner will get it incorectly
+            //vector_3 corrected_position = plan_get_position_mm();
+            //corrected_position.debug("position before G29");
+            plan_bed_level_matrix.set_to_identity();
+            vector_3 uncorrected_position = plan_get_position();
+            //uncorrected_position.debug("position durring G29");
+            current_position[X_AXIS] = uncorrected_position.x;
+            current_position[Y_AXIS] = uncorrected_position.y;
+            current_position[Z_AXIS] = uncorrected_position.z;
+            plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
+            setup_for_endstop_move();
+
+#if defined(ENABLE_AUTO_BED_LEVELING) && defined(LOWER_AND_RAISE_Z_PROBE)
+            lower_z_probe();
+#endif // #if defined(ENABLE_AUTO_BED_LEVELING) && defined(LOWER_AND_RAISE_Z_PROBE)
+
+            feedrate = homing_feedrate[Z_AXIS];
+
+            // prob 1
+            do_blocking_move_to(current_position[X_AXIS], current_position[Y_AXIS], 40);
+            do_blocking_move_to(LEFT_PROBE_BED_POSITION - X_PROBE_OFFSET_FROM_EXTRUDER, BACK_PROBE_BED_POSITION - Y_PROBE_OFFSET_FROM_EXTRUDER, current_position[Z_AXIS]);
+            run_z_probe();
+            float z_at_xLeft_yBack = current_position[Z_AXIS];
+
+            SERIAL_PROTOCOLPGM("Bed x: ");
+            SERIAL_PROTOCOL(LEFT_PROBE_BED_POSITION);
+            SERIAL_PROTOCOLPGM(" y: ");
+            SERIAL_PROTOCOL(BACK_PROBE_BED_POSITION);
+            SERIAL_PROTOCOLPGM(" z: ");
+            SERIAL_PROTOCOL(current_position[Z_AXIS]);
+            SERIAL_PROTOCOLPGM("\n");
+
+            // prob 2
+            do_blocking_move_to(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS] + 10);
+            do_blocking_move_to(LEFT_PROBE_BED_POSITION - X_PROBE_OFFSET_FROM_EXTRUDER, FRONT_PROBE_BED_POSITION - Y_PROBE_OFFSET_FROM_EXTRUDER, current_position[Z_AXIS]);
+            run_z_probe();
+            float z_at_xLeft_yFront = current_position[Z_AXIS];
+
+            SERIAL_PROTOCOLPGM("Bed x: ");
+            SERIAL_PROTOCOL(LEFT_PROBE_BED_POSITION);
+            SERIAL_PROTOCOLPGM(" y: ");
+            SERIAL_PROTOCOL(FRONT_PROBE_BED_POSITION);
+            SERIAL_PROTOCOLPGM(" z: ");
+            SERIAL_PROTOCOL(current_position[Z_AXIS]);
+            SERIAL_PROTOCOLPGM("\n");
+
+            // prob 3
+            do_blocking_move_to(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS] + 10);
+            // the current position will be updated by the blocking move so the head will not lower on this next call.
+            do_blocking_move_to(RIGHT_PROBE_BED_POSITION - X_PROBE_OFFSET_FROM_EXTRUDER, FRONT_PROBE_BED_POSITION - Y_PROBE_OFFSET_FROM_EXTRUDER, current_position[Z_AXIS]);
+            run_z_probe();
+            float z_at_xRight_yFront = current_position[Z_AXIS];
+
+            SERIAL_PROTOCOLPGM("Bed x: ");
+            SERIAL_PROTOCOL(RIGHT_PROBE_BED_POSITION);
+            SERIAL_PROTOCOLPGM(" y: ");
+            SERIAL_PROTOCOL(FRONT_PROBE_BED_POSITION);
+            SERIAL_PROTOCOLPGM(" z: ");
+            SERIAL_PROTOCOL(current_position[Z_AXIS]);
+            SERIAL_PROTOCOLPGM("\n");
+
+            clean_up_after_endstop_move();
+
+            set_bed_level_equation(z_at_xLeft_yFront, z_at_xRight_yFront, z_at_xLeft_yBack);
+        }
+#endif // ENABLE_AUTO_BED_LEVELING
+      break;
+        
+    case 30: // G30 Single Z Probe
+#ifdef ENABLE_AUTO_BED_LEVELING
+        // TODO: (Z_MIN_PIN > -1) should also be true.  I don't know the prefered way to ensure this.
+        st_synchronize();
+        // TODO: make sure the bed_level_rotation_matrix is identity or the planner will get set incorectly
+        setup_for_endstop_move();
+
+        feedrate = homing_feedrate[Z_AXIS];
+
+        run_z_probe();
+        SERIAL_PROTOCOLPGM("Bed Position X: ");
+        SERIAL_PROTOCOL(current_position[X_AXIS]);
+        SERIAL_PROTOCOLPGM(" Y: ");
+        SERIAL_PROTOCOL(current_position[Y_AXIS]);
+        SERIAL_PROTOCOLPGM(" Z: ");
+        SERIAL_PROTOCOL(current_position[Z_AXIS]);
+        SERIAL_PROTOCOLPGM("\n");
+
+        clean_up_after_endstop_move();
+#endif // ENABLE_AUTO_BED_LEVELING
+      break;
     case 90: // G90
       relative_mode = false;
       break;
